@@ -8,6 +8,8 @@ import glob
 import re
 import time
 import importlib.util
+import sysconfig
+import platform
 
 # ==========================================
 # Dependency Management & Aesthetics
@@ -80,14 +82,30 @@ def log_msg(msg, log_file=None, use_tqdm=False):
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(clean_msg + "\n")
 
+def ensure_scripts_in_path(silent=False):
+    """Dynamically adds the Python Scripts directory to PATH to fix Meeko executable warnings."""
+    scripts_dir = sysconfig.get_path("scripts")
+    if scripts_dir and scripts_dir not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + scripts_dir
+        if not silent:
+            print(f"{C.YELLOW}[*] Appending Python Scripts directory to PATH: {scripts_dir}{C.RESET}")
+        
+        # Attempt to permanently set the path in Windows using setx
+        if platform.system() == "Windows":
+            try:
+                subprocess.run(f'setx PATH "%PATH%;{scripts_dir}"', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
 def check_pipeline_dependencies(steps):
     print(f"{C.MAGENTA}[*] Verifying Sub-Script Dependencies...{C.RESET}")
     reqs = set()
     if 1 in steps: reqs.add('MDAnalysis')
     if 2 in steps: reqs.update(['numpy', 'Bio']) 
-    if 4 in steps: reqs.update(['meeko', 'tqdm', 'Bio', 'numpy', 'scipy', 'rdkit', 'gemmi'])
-    if 5 in steps: reqs.update(['rdkit', 'tqdm', 'numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
-    # Updated dependencies based on VinaDock v2.6 additions
+    # Grouping the Meeko cluster for PrepProt
+    if 4 in steps: reqs.update(['numpy', 'scipy', 'rdkit', 'meeko', 'gemmi', 'tqdm', 'Bio'])
+    if 5 in steps: reqs.update(['rdkit', 'tqdm'])
+    # Grouping the Meeko cluster for VinaDock
     if 6 in steps: reqs.update(['numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
     if 7 in steps: reqs.update(['pandas', 'openpyxl', 'colorama', 'tqdm'])
     
@@ -97,10 +115,26 @@ def check_pipeline_dependencies(steps):
             missing.append('biopython' if pkg == 'Bio' else pkg)
             
     if missing:
-        print(f"{C.RED}[!] Missing required packages for selected pipeline steps: {', '.join(missing)}{C.RESET}")
-        print(f"{C.RED}    Please run: pip install {' '.join(missing)}{C.RESET}")
-        sys.exit(1)
+        print(f"{C.YELLOW}[!] Missing packages detected: {', '.join(missing)}{C.RESET}")
+        print(f"{C.CYAN}[*] Auto-installing missing packages. Please wait...{C.RESET}")
+        try:
+            # Auto-install all missing dependencies silently
+            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+            print(f"{C.GREEN}[+] Installation successful!{C.RESET}")
+        except subprocess.CalledProcessError:
+            print(f"{C.RED}[!] Auto-installation failed. Please check your internet connection or install manually:{C.RESET}")
+            print(f"{C.RED}    pip install {' '.join(missing)}{C.RESET}")
+            sys.exit(1)
+            
+        # If meeko was just installed, we definitely need to refresh the path
+        if 'meeko' in missing:
+            ensure_scripts_in_path()
+            
     print(f"{C.GREEN}[+] All dependencies satisfied.{C.RESET}")
+    
+    # Always ensure scripts path is loaded for this session if Meeko tools might be run
+    if any(s in steps for s in [4, 5, 6]):
+        ensure_scripts_in_path(silent=True)
 
 def extract_residues(input_val):
     if not input_val: return None
@@ -378,7 +412,6 @@ def run_pipeline(steps, cfg, paths):
                             expected_ext = (expected_ext,)
                         found_files = [f for f in os.listdir(expected_out_dir) if f.endswith(expected_ext)]
                     else:
-                        # Allow finding ANY file/folder to account for VinaDock6's subdirectories
                         found_files = os.listdir(expected_out_dir)
                         
                     if not found_files:
@@ -566,7 +599,6 @@ def run_pipeline(steps, cfg, paths):
                 if flex_path: args.extend(['--receptor', rec_path, '--flex', flex_path])
                 else: args.extend(['--receptor', rec_path])
 
-                # Expected ext is None because VinaDock6.py puts things in subdirectories now
                 execute_script('VinaDock', args, "Docking Completed", pbar, expected_out_dir=out_6, expected_ext=None)
                 out_paths['vina_out'] = out_6
                 pbar.update(1)
@@ -578,7 +610,6 @@ def run_pipeline(steps, cfg, paths):
             
             valid_logs = False
             if in_7 and os.path.exists(in_7):
-                # Search recursively to find logs inside the new "Log" subdirectory created by VinaDock6
                 if os.path.isdir(in_7) and glob.glob(os.path.join(in_7, "**", "*.txt"), recursive=True): 
                     valid_logs = True
                 elif os.path.isfile(in_7) and in_7.endswith('.txt'): 
