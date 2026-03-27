@@ -49,7 +49,7 @@ def print_banner(log_file=None, to_terminal=True):
   ░██░██   ░██░██    ░██ ░██   ░██  ░██   ░██  ░██    ░██ ░██    ░██ ░██   ░██  ░██  ░██  
    ░███    ░██░██    ░██  ░█████░██ ░███████    ░███████   ░███████  ░██    ░██░██    ░██ 
                                                                                                                                                                          
-  > Version 2.8  |  > Designed by karthxk (https://karthxk0.github.io/)          
+  > Version 2.9  |  > Designed by karthxk (https://karthxk0.github.io/)          
   
 ============================================================================================={C.RESET}
 """
@@ -85,8 +85,10 @@ def check_pipeline_dependencies(steps):
     reqs = set()
     if 1 in steps: reqs.add('MDAnalysis')
     if 2 in steps: reqs.update(['numpy', 'Bio']) 
-    if 4 in steps: reqs.update(['meeko', 'tqdm', 'Bio', 'numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
-    if 5 in steps: reqs.update(['rdkit', 'tqdm'])
+    if 4 in steps: reqs.update(['meeko', 'tqdm', 'Bio', 'numpy', 'scipy', 'rdkit', 'gemmi'])
+    if 5 in steps: reqs.update(['rdkit', 'tqdm', 'numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
+    # Updated dependencies based on VinaDock v2.6 additions
+    if 6 in steps: reqs.update(['numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
     if 7 in steps: reqs.update(['pandas', 'openpyxl', 'colorama', 'tqdm'])
     
     missing = []
@@ -241,7 +243,6 @@ def gather_inputs(steps):
         if cfg.get('search_space') == 'targeted' and cfg.get('targeted_auto'): needs_interres = True
         if cfg.get('docking_type') == 'flexible' and cfg.get('flex_auto'): needs_interres = True
         
-        # If Blind/Standard run, InterResFi is useless. Silently drop it so it doesn't fail.
         if not needs_interres and len(steps) > 1:
             steps.remove(1)
             print(f"\n{C.YELLOW}[*] Auto-Optimization: Step 1 (InterResFi) will be skipped as it's not required for Blind/Standard parameters.{C.RESET}")
@@ -377,13 +378,13 @@ def run_pipeline(steps, cfg, paths):
                             expected_ext = (expected_ext,)
                         found_files = [f for f in os.listdir(expected_out_dir) if f.endswith(expected_ext)]
                     else:
-                        # If no specific extension is enforced, just check if ANY file was created
-                        found_files = [f for f in os.listdir(expected_out_dir) if os.path.isfile(os.path.join(expected_out_dir, f))]
+                        # Allow finding ANY file/folder to account for VinaDock6's subdirectories
+                        found_files = os.listdir(expected_out_dir)
                         
                     if not found_files:
                         results['failed'] += 1
-                        ext_str = "/".join(expected_ext) if expected_ext else "any"
-                        results['logs'].append(f"{script_key}: FAILED (No valid {ext_str} outputs generated)")
+                        ext_str = "/".join(expected_ext) if expected_ext else "outputs"
+                        results['logs'].append(f"{script_key}: FAILED (No valid {ext_str} generated)")
                         return False
 
                 results['success'] += 1
@@ -403,7 +404,7 @@ def run_pipeline(steps, cfg, paths):
     with tqdm(total=len(steps), bar_format="{l_bar}%s{bar}%s| {n_fmt}/{total_fmt}" % (Fore.LIGHTCYAN_EX, Fore.RESET), ncols=80) as pbar:
 
         # Step 1: InterResFi
-        if 1 in steps or (cfg.get('targeted_auto') and 2 in steps):
+        if 1 in steps:
             out_1 = os.path.join(cfg['main_out_dir'], "1 Interacting Residues - InterResFi")
             os.makedirs(out_1, exist_ok=True)
             pdb_in = cfg.get('cocrystal_pdb', cfg.get('receptor_pdb', ''))
@@ -412,7 +413,7 @@ def run_pipeline(steps, cfg, paths):
             if success:
                 txts = glob.glob(os.path.join(out_1, "*_InterRes.txt"))
                 if txts: out_paths['inter_res_txt'] = txts[0]
-            if 1 in steps: pbar.update(1)
+            pbar.update(1)
 
         # Step 2: GridConfigGen
         if 2 in steps:
@@ -457,7 +458,6 @@ def run_pipeline(steps, cfg, paths):
                 args = ['-c', cfg_txt, '-o', out_3]
                 grid_rec = cfg.get('receptor_pdb') or cfg.get('vina_receptor') or cfg.get('grid_receptor')
                 if grid_rec: args.extend(['-p', grid_rec])
-                # expected_ext=None checks if ANY valid macro file (.py, .pml, .txt) was saved to the folder
                 execute_script('GridViz', args, "Grid Visualized", pbar, expected_out_dir=out_3, expected_ext=None)
                 pbar.update(1)
 
@@ -566,7 +566,8 @@ def run_pipeline(steps, cfg, paths):
                 if flex_path: args.extend(['--receptor', rec_path, '--flex', flex_path])
                 else: args.extend(['--receptor', rec_path])
 
-                execute_script('VinaDock', args, "Docking Completed", pbar, expected_out_dir=out_6, expected_ext=(".txt", ".pdbqt"))
+                # Expected ext is None because VinaDock6.py puts things in subdirectories now
+                execute_script('VinaDock', args, "Docking Completed", pbar, expected_out_dir=out_6, expected_ext=None)
                 out_paths['vina_out'] = out_6
                 pbar.update(1)
 
@@ -577,8 +578,11 @@ def run_pipeline(steps, cfg, paths):
             
             valid_logs = False
             if in_7 and os.path.exists(in_7):
-                if os.path.isdir(in_7) and glob.glob(os.path.join(in_7, "*.txt")): valid_logs = True
-                elif os.path.isfile(in_7) and in_7.endswith('.txt'): valid_logs = True
+                # Search recursively to find logs inside the new "Log" subdirectory created by VinaDock6
+                if os.path.isdir(in_7) and glob.glob(os.path.join(in_7, "**", "*.txt"), recursive=True): 
+                    valid_logs = True
+                elif os.path.isfile(in_7) and in_7.endswith('.txt'): 
+                    valid_logs = True
                 
             if not valid_logs:
                 log_msg(f"\n{C.RED}[!] Cascading Failure: No Vina log files found for BindReSort.{C.RESET}", log_file, use_tqdm=True)
@@ -586,7 +590,7 @@ def run_pipeline(steps, cfg, paths):
                 results['logs'].append("BindReSort: SKIPPED (Cascading Failure - No logs to sort)")
                 pbar.update(1)
             else:
-                execute_script('BindReSort', ['-i', in_7, '-o', out_7, '-f', '2'], "Results Sorted", pbar, expected_out_dir=out_7, expected_ext=(".xlsx", ".csv", ".txt"))
+                execute_script('BindReSort', ['-i', in_7, '-o', out_7, '-f', '2'], "Results Sorted", pbar, expected_out_dir=out_7, expected_ext=".xlsx")
                 pbar.update(1)
                 
         pbar.set_description(f"{C.GREEN}Pipeline Complete!{C.RESET}")
