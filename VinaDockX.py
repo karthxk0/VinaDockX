@@ -51,7 +51,7 @@ def print_banner(log_file=None, to_terminal=True):
   ░██░██   ░██░██    ░██ ░██   ░██  ░██   ░██  ░██    ░██ ░██    ░██ ░██   ░██  ░██  ░██  
    ░███    ░██░██    ░██  ░█████░██ ░███████    ░███████   ░███████  ░██    ░██░██    ░██ 
                                                                                                                                                                          
-  > Version 2.10  |  > Designed by karthxk (https://karthxk0.github.io/)          
+  > Version 2.11  |  > Designed by karthxk (https://karthxk0.github.io/)          
   
 ============================================================================================={C.RESET}
 """
@@ -153,6 +153,19 @@ def extract_residues(input_val):
     unique_res = list(dict.fromkeys(residues))
     return ",".join(unique_res)
 
+def get_ligand_count(input_str):
+    """Calculates the total number of valid ligand files specified by the user."""
+    if not input_str: return 0
+    count = 0
+    paths = [p.strip().strip('"').strip("'") for p in input_str.split(',')]
+    for p in paths:
+        if os.path.isfile(p): 
+            count += 1
+        elif os.path.isdir(p):
+            for root, _, files in os.walk(p):
+                count += sum(1 for f in files if f.lower().endswith(('.sdf', '.mol2', '.pdbqt')))
+    return count
+
 def find_sub_scripts():
     scripts_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Scripts")
     script_names = ['InterResFi', 'GridConfigGen', 'GridViz', 'PrepProt', 'PrepLig', 'VinaDock', 'BindReSort']
@@ -188,8 +201,6 @@ def parse_run_sequence(seq_str):
 def gather_inputs(steps):
     cfg = {}
     print(f"\n{C.BOLD}{C.MAGENTA}--- Configuring Pipeline Sequence ---{C.RESET}")
-    
-    cfg['base_out'] = clean_input("Enter the path to the directory where you want to save the Output:")
     
     if 2 in steps:
         print(f"\n{C.BOLD}{C.WHITE}[Search Space Selection]{C.RESET}")
@@ -262,6 +273,20 @@ def gather_inputs(steps):
             cfg['vina_ligands'] = clean_input("Step 6 selected but Step 5 skipped. Enter Ligands folder/files (.pdbqt):")
         if 2 not in steps and 3 not in steps and 'config_txt' not in cfg:
             cfg['config_txt'] = clean_input("Step 6 selected but Step 2 skipped. Enter Config (.txt) file:")
+            
+        # --- Simultaneous Docking Evaluation ---
+        ligands_str = cfg.get('ligands_input') or cfg.get('vina_ligands') or ""
+        lig_count = get_ligand_count(ligands_str)
+        
+        if lig_count > 1:
+            print(f"\n{C.CYAN}[*] Multiple ligands selected.{C.RESET}")
+            print(f"{C.BOLD}{C.WHITE}[Select Ligand Docking Type]{C.RESET}")
+            print("  1. Batch ligand docking (1 ligand docking at a time)")
+            print("  2. Multiple Ligand Docking (Simultaneously dock all input ligands)")
+            sim_choice = clean_input("Enter 1 or 2:")
+            cfg['simultaneous'] = (sim_choice == '2')
+        else:
+            cfg['simultaneous'] = False
 
     if 7 in steps and 6 not in steps:
         cfg['bindresort_input'] = clean_input("Step 7 selected but Step 6 skipped. Enter Vina log (.txt) files/folders:")
@@ -280,6 +305,9 @@ def gather_inputs(steps):
         if not needs_interres and len(steps) > 1:
             steps.remove(1)
             print(f"\n{C.YELLOW}[*] Auto-Optimization: Step 1 (InterResFi) will be skipped as it's not required for Blind/Standard parameters.{C.RESET}")
+
+    # --- FINAL OUTPUT DIRECTORY PROMPT ---
+    cfg['base_out'] = clean_input("Enter the path to the directory where you want to save the Output:")
 
     target_file = cfg.get('receptor_pdb') or cfg.get('vina_receptor') or cfg.get('grid_receptor') or cfg.get('bindresort_input') or cfg.get('ligands_input') or "Target"
     target_file = target_file.split(',')[0].strip()
@@ -327,9 +355,14 @@ def confirm_inputs(cfg, steps):
                 summary += f"  Flex Residues: Manual ({cfg.get('flex_res_clean')})\n"
         summary += "\n"
         
-    if 'ligands_input' in cfg:
-        summary += f"{C.YELLOW}[Ligand Preparation]{C.RESET}\n"
-        summary += f"  Input Sources: {cfg['ligands_input']}\n\n"
+    if 'ligands_input' in cfg or 'vina_ligands' in cfg:
+        summary += f"{C.YELLOW}[Ligand Preparation & Docking]{C.RESET}\n"
+        lig_src = cfg.get('ligands_input') or cfg.get('vina_ligands')
+        summary += f"  Input Sources: {lig_src}\n"
+        if 'simultaneous' in cfg:
+            sim_str = "Simultaneous Multiple Docking" if cfg['simultaneous'] else "Batch Docking (1 by 1)"
+            summary += f"  Docking Mode:  {sim_str}\n"
+        summary += "\n"
 
     print(summary)
     choice = input(f"{C.GREEN}Are all these inputs correct? Proceed with run? (y/n): {C.RESET}").strip().lower()
@@ -598,6 +631,9 @@ def run_pipeline(steps, cfg, paths):
                 args = ['--cli', '--outdir', out_6, '--config', cfg_txt, '--ligands', lig_tmp_dir]
                 if flex_path: args.extend(['--receptor', rec_path, '--flex', flex_path])
                 else: args.extend(['--receptor', rec_path])
+
+                if cfg.get('simultaneous'):
+                    args.append('--simultaneous')
 
                 execute_script('VinaDock', args, "Docking Completed", pbar, expected_out_dir=out_6, expected_ext=None)
                 out_paths['vina_out'] = out_6
