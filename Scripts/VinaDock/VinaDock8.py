@@ -30,7 +30,7 @@ def print_banner():
     \  /  | | | | | (_| | |__| | (_) | (__|   < 
      \/   |_|_| |_|\__,_|_____/ \___/ \___|_|\_\.py                                                       
                                                                   
-  > Version 2.7  |  > Built by karthxk (https://karthxk0.github.io/)         
+  > Version 2.8  |  > Built by karthxk (https://karthxk0.github.io/)         
   
 ======================================================================""" + C.RESET
     print(banner)
@@ -214,8 +214,13 @@ def split_models(split_exe, pdbqt_file, out_dir_pdbqt, out_dir_sdf, receptor_bas
     pattern = os.path.join(out_dir_pdbqt, f"{base_name}_ligand_*.pdbqt")
     split_files = glob.glob(pattern)
     
-    split_pdbqt_dir = os.path.join(out_dir_pdbqt, "Split Models")
-    split_sdf_dir = os.path.join(out_dir_sdf, "Split Models")
+    # Create unique split model folders for this specific docking combination
+    unique_folder_name = f"{receptor_base}-{lig_base}{space_tag}{flex_tag} Split Models"
+    split_pdbqt_dir = os.path.join(out_dir_pdbqt, unique_folder_name)
+    split_sdf_dir = os.path.join(out_dir_sdf, unique_folder_name)
+    
+    os.makedirs(split_pdbqt_dir, exist_ok=True)
+    os.makedirs(split_sdf_dir, exist_ok=True)
     
     sp_pdbqt_count = 0
     sp_sdf_count = 0
@@ -420,10 +425,6 @@ def main():
     os.makedirs(pdbqt_dir, exist_ok=True)
     os.makedirs(sdf_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
-    
-    if can_split:
-        os.makedirs(os.path.join(pdbqt_dir, "Split Models"), exist_ok=True)
-        os.makedirs(os.path.join(sdf_dir, "Split Models"), exist_ok=True)
     
     if not ligands:
         print(f"{C.RED}[!] No valid ligand PDBQT files found from input.{C.RESET}")

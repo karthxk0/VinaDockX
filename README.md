@@ -1,4 +1,4 @@
-# VinaDockX v2.11
+# VinaDockX v2.12
 A multipurpose python tool to make AutoDock Vina based docking and virtual screening simple and time saving 
 
 ## Usage
