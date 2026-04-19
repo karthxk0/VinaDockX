@@ -2,7 +2,7 @@
 A multipurpose python tool to make AutoDock Vina based docking and virtual screening simple and time saving 
 
 ## Usage
-- Download and extract `VinaDockX.zip` from latest [Releases](https://github.com/karthxk0/VinaDockX/releases) or [Click here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
+- Download and extract `VinaDockX.zip`/`VinaDockX-main.zip` from latest [Releases](https://github.com/karthxk0/VinaDockX/releases) or [Click here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
 - Open `Terminal` in the extracted directory
 - Run : `python VinaDockX.py`
 
@@ -14,7 +14,7 @@ A multipurpose python tool to make AutoDock Vina based docking and virtual scree
 * **Dependencies:** The script is designed to be plug-and-play. It will **automatically detect and install** any missing Python packages (such as `MDAnalysis`, `numpy`, `biopython`, `rdkit`, `meeko`, `gemmi`, `pandas`, `openpyxl`, `colorama`, and `tqdm`). 
 
 ### 2. Downloading the Tool
-- Download and extract `VinaDockX.zip` from latest [Releases](https://github.com/karthxk0/VinaDockX/releases) or [Click here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
+- Download and extract `VinaDockX.zip`/`VinaDockX-main.zip` from latest [Releases](https://github.com/karthxk0/VinaDockX/releases) or [Click here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
 - Alternatively, clone the repository directly from GitHub using your terminal or command prompt:
 
 ```bash
