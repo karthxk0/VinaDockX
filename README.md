@@ -4,7 +4,7 @@ A multipurpose python tool to make AutoDock Vina based docking and virtual scree
 ## Usage
 - Download and extract `VinaDockX-main.zip` from [here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
 - Open `Terminal` in the extracted directory
-- Run : `python VinaDockX.py`
+- Run : `python "VinaDockX.py"`
 
 
 ## Prerequisites & Installation
@@ -33,7 +33,7 @@ cd VinaDockX
 - Run the script from terminal using python:
 
 ```bash
-python VinaDockX.py
+python "VinaDockX.py"
 ```
 
 ## Functioning
