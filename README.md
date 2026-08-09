@@ -1,5 +1,5 @@
 # VinaDockX v2.13
-A multipurpose python tool to make AutoDock Vina based docking and virtual screening simple and time saving 
+A terminal-based docking toolkit that streamlines the complete AutoDock Vina workflow, from interaction-site detection, grid generation and visualization, and protein/ligand preparation to multi-ligand and batch docking and automated result analysis.
 
 ## Usage
 - Download and extract `VinaDockX-main.zip` from [here](https://github.com/karthxk0/VinaDockX/archive/refs/heads/main.zip)
