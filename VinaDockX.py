@@ -11,9 +11,7 @@ import importlib.util
 import sysconfig
 import platform
 
-# ==========================================
-# Dependency Management & Aesthetics
-# ==========================================
+
 def install_and_import_aesthetics():
     """Ensures colorama and tqdm are available for the master script."""
     missing = []
@@ -62,9 +60,7 @@ def print_banner(log_file=None, to_terminal=True):
         with open(log_file, 'a', encoding='utf-8') as f:
             f.write(clean_banner + "\n")
 
-# ==========================================
-# Helper Functions
-# ==========================================
+
 def clean_input(prompt_text, sample=""):
     print(f"\n{C.YELLOW}{prompt_text}{C.RESET}")
     if sample:
@@ -90,7 +86,6 @@ def ensure_scripts_in_path(silent=False):
         if not silent:
             print(f"{C.YELLOW}[*] Appending Python Scripts directory to PATH: {scripts_dir}{C.RESET}")
         
-        # Attempt to permanently set the path in Windows using setx
         if platform.system() == "Windows":
             try:
                 subprocess.run(f'setx PATH "%PATH%;{scripts_dir}"', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -102,10 +97,8 @@ def check_pipeline_dependencies(steps):
     reqs = set()
     if 1 in steps: reqs.add('MDAnalysis')
     if 2 in steps: reqs.update(['numpy', 'Bio']) 
-    # Grouping the Meeko cluster for PrepProt
     if 4 in steps: reqs.update(['numpy', 'scipy', 'rdkit', 'meeko', 'gemmi', 'tqdm', 'Bio'])
     if 5 in steps: reqs.update(['rdkit', 'tqdm'])
-    # Grouping the Meeko cluster for VinaDock
     if 6 in steps: reqs.update(['numpy', 'scipy', 'rdkit', 'meeko', 'gemmi'])
     if 7 in steps: reqs.update(['pandas', 'openpyxl', 'colorama', 'tqdm'])
     
@@ -118,7 +111,7 @@ def check_pipeline_dependencies(steps):
         print(f"{C.YELLOW}[!] Missing packages detected: {', '.join(missing)}{C.RESET}")
         print(f"{C.CYAN}[*] Auto-installing missing packages. Please wait...{C.RESET}")
         try:
-            # Auto-install all missing dependencies silently
+            
             subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
             print(f"{C.GREEN}[+] Installation successful!{C.RESET}")
         except subprocess.CalledProcessError:
@@ -126,13 +119,13 @@ def check_pipeline_dependencies(steps):
             print(f"{C.RED}    pip install {' '.join(missing)}{C.RESET}")
             sys.exit(1)
             
-        # If meeko was just installed, we definitely need to refresh the path
+        
         if 'meeko' in missing:
             ensure_scripts_in_path()
             
     print(f"{C.GREEN}[+] All dependencies satisfied.{C.RESET}")
     
-    # Always ensure scripts path is loaded for this session if Meeko tools might be run
+    
     if any(s in steps for s in [4, 5, 6]):
         ensure_scripts_in_path(silent=True)
 
@@ -195,9 +188,7 @@ def parse_run_sequence(seq_str):
             steps.add(int(part))
     return sorted(list(steps))
 
-# ==========================================
-# Input Logic & Sequencing
-# ==========================================
+
 def gather_inputs(steps):
     cfg = {}
     print(f"\n{C.BOLD}{C.MAGENTA}--- Configuring Pipeline Sequence ---{C.RESET}")
@@ -274,7 +265,7 @@ def gather_inputs(steps):
         if 2 not in steps and 3 not in steps and 'config_txt' not in cfg:
             cfg['config_txt'] = clean_input("Step 6 selected but Step 2 skipped. Enter Config (.txt) file:")
             
-        # --- Simultaneous Docking Evaluation ---
+        
         ligands_str = cfg.get('ligands_input') or cfg.get('vina_ligands') or ""
         lig_count = get_ligand_count(ligands_str)
         
@@ -296,7 +287,7 @@ def gather_inputs(steps):
         if pdb_opt:
             cfg['grid_receptor'] = pdb_opt
 
-    # --- INTELLIGENT PIPELINE PRUNING ---
+    
     if 1 in steps:
         needs_interres = False
         if cfg.get('search_space') == 'targeted' and cfg.get('targeted_auto'): needs_interres = True
@@ -306,7 +297,7 @@ def gather_inputs(steps):
             steps.remove(1)
             print(f"\n{C.YELLOW}[*] Auto-Optimization: Step 1 (InterResFi) will be skipped as it's not required for Blind/Standard parameters.{C.RESET}")
 
-    # --- FINAL OUTPUT DIRECTORY PROMPT ---
+    
     cfg['base_out'] = clean_input("Enter the path to the directory where you want to save the Output:")
 
     target_file = cfg.get('receptor_pdb') or cfg.get('vina_receptor') or cfg.get('grid_receptor') or cfg.get('bindresort_input') or cfg.get('ligands_input') or "Target"
@@ -380,9 +371,7 @@ def confirm_inputs(cfg, steps):
         f.write(f"Run ID: {cfg['run_id']}\n")
         f.write(clean_summary + "\n\n")
 
-# ==========================================
-# Pipeline Execution
-# ==========================================
+
 def run_pipeline(steps, cfg, paths):
     log_file = cfg['log_file']
     print_banner(log_file, to_terminal=False) 
@@ -469,7 +458,7 @@ def run_pipeline(steps, cfg, paths):
     
     with tqdm(total=len(steps), bar_format="{l_bar}%s{bar}%s| {n_fmt}/{total_fmt}" % (Fore.LIGHTCYAN_EX, Fore.RESET), ncols=80) as pbar:
 
-        # Step 1: InterResFi
+        
         if 1 in steps:
             out_1 = os.path.join(cfg['main_out_dir'], "1 Interacting Residues - InterResFi")
             os.makedirs(out_1, exist_ok=True)
@@ -481,7 +470,7 @@ def run_pipeline(steps, cfg, paths):
                 if txts: out_paths['inter_res_txt'] = txts[0]
             pbar.update(1)
 
-        # Step 2: GridConfigGen
+        
         if 2 in steps:
             cascade_fail = False
             out_2 = os.path.join(cfg['main_out_dir'], "2 Grid & Config - GridConfigGen")
@@ -509,7 +498,7 @@ def run_pipeline(steps, cfg, paths):
                     if txts: out_paths['config_txt'] = txts[0]
                 pbar.update(1)
 
-        # Step 3: GridViz
+        
         if 3 in steps:
             out_3 = os.path.join(cfg['main_out_dir'], "3 Grid Visualizer - GridViz")
             os.makedirs(out_3, exist_ok=True)
@@ -527,7 +516,7 @@ def run_pipeline(steps, cfg, paths):
                 execute_script('GridViz', args, "Grid Visualized", pbar, expected_out_dir=out_3, expected_ext=None)
                 pbar.update(1)
 
-        # Step 4: PrepProt
+        
         if 4 in steps:
             cascade_fail = False
             out_4 = os.path.join(cfg['main_out_dir'], "4 Protein Preparation - PrepProt")
@@ -566,7 +555,7 @@ def run_pipeline(steps, cfg, paths):
                 if success: out_paths['prot_dir'] = out_4
                 pbar.update(1)
 
-        # Step 5: PrepLig
+        
         if 5 in steps:
             out_5 = os.path.join(cfg['main_out_dir'], "5 Ligand Preparation - PrepLig")
             os.makedirs(out_5, exist_ok=True)
@@ -574,7 +563,7 @@ def run_pipeline(steps, cfg, paths):
             if success: out_paths['lig_dir'] = out_5
             pbar.update(1)
 
-        # Step 6: VinaDock
+        
         if 6 in steps:
             cascade_fail = False
             out_6 = os.path.join(cfg['main_out_dir'], "6 Docking Results - VinaDock")
@@ -639,7 +628,7 @@ def run_pipeline(steps, cfg, paths):
                 out_paths['vina_out'] = out_6
                 pbar.update(1)
 
-        # Step 7: BindReSort
+        
         if 7 in steps:
             out_7 = os.path.join(cfg['main_out_dir'], "7 Sorted Results - BindReSort")
             in_7 = out_paths.get('vina_out', cfg.get('bindresort_input', ''))
@@ -662,13 +651,13 @@ def run_pipeline(steps, cfg, paths):
                 
         pbar.set_description(f"{C.GREEN}Pipeline Complete!{C.RESET}")
 
-    # --- MASTER CLEANUP ---
+    
     tmp_dir_path = os.path.join(cfg['main_out_dir'], ".tmp_vina_inputs")
     if os.path.exists(tmp_dir_path):
         time.sleep(1) 
         shutil.rmtree(tmp_dir_path, ignore_errors=True)
 
-    # Final Detailed Summary
+    
     summary = f"""
 {C.BOLD}{C.MAGENTA}================================================================={C.RESET}
 {C.BOLD}{C.WHITE}                          FINAL RUN SUMMARY{C.RESET}
@@ -690,9 +679,7 @@ def run_pipeline(steps, cfg, paths):
     summary += f"{C.MAGENTA}================================================================={C.RESET}\n"
     log_msg(summary, log_file, use_tqdm=True)
 
-# ==========================================
-# Main Menu
-# ==========================================
+
 def main():
     paths = find_sub_scripts()
     print_banner()
